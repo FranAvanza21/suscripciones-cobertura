@@ -51,10 +51,8 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'POST') {
-      const body  = req.body ?? {};
-      const fotos = (body.fotos || []).map(f => (typeof f === 'object' ? { nombre: f.nombre, tipo: f.tipo } : f));
-      const sub   = { ...body, fotos, id: Date.now(), fecha: new Date().toISOString() };
-      const data  = await load();
+      const sub  = { ...(req.body ?? {}), id: Date.now(), fecha: new Date().toISOString() };
+      const data = await load();
       data.unshift(sub);
       await save(data);
       return res.status(201).json({ ok: true, id: sub.id });
