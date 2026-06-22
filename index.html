@@ -125,9 +125,16 @@
         <div class="mb-1">
           <div class="field-label mb-1">Fotos adjuntas (${fotosValidas.length})</div>
           <div>${fotosValidas.map(f => {
-            const isUrl = /^https?:\/\//i.test(f) || f.startsWith('/');
-            const href = isUrl ? f : `/fotos/${encodeURIComponent(f)}`;
-            const name = f.startsWith('/api/foto') ? decodeURIComponent(f.split(':').pop() || 'foto') : (isUrl ? f.split('/').pop() : f);
+            let href, name;
+            try {
+              const obj = JSON.parse(f);
+              if (obj.n && obj.d) { href = obj.d; name = obj.n; }
+              else throw 0;
+            } catch {
+              const isUrl = /^https?:\/\//i.test(f) || f.startsWith('/');
+              href = isUrl ? f : `/fotos/${encodeURIComponent(f)}`;
+              name = isUrl ? f.split('/').pop() : f;
+            }
             return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" download="${escapeHtml(name)}"
               class="badge bg-secondary me-1 mb-1 text-decoration-none" style="cursor:pointer">📎 ${escapeHtml(name)}</a>`;
           }).join('')}</div>
