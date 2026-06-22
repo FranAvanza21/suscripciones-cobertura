@@ -1,0 +1,5 @@
+{
+  "buildCommand": "echo \"const SUSCRIPCIONES_API_KEY = '$SUSCRIPCIONES_API_KEY';\" > config.js",
+  "outputDirectory": ".",
+  "rewrites": [{ "source": "/", "destination": "/index.html" }]
+}

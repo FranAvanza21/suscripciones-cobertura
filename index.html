@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Suscripciones — Cobertura</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <script src="config.js"></script>
+  <style>
+    .sub-card { transition: box-shadow .15s; }
+    .sub-card:hover { box-shadow: 0 .4rem .8rem rgba(0,0,0,.1) !important; }
+    .field-label { color: #6c757d; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+    .empty-state { padding: 5rem 1rem; text-align: center; color: #adb5bd; }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container-fluid py-4" style="max-width: 960px;">
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <strong>Suscripciones de Cobertura</strong>
+        <div class="d-flex gap-2 align-items-center">
+          <span id="sub-count-badge" class="badge bg-white text-primary"></span>
+          <button id="btn-refresh" class="btn btn-sm btn-light">↺ Actualizar</button>
+          <button id="btn-clear-all" class="btn btn-sm btn-outline-light" disabled>Eliminar todas</button>
+        </div>
+      </div>
+      <div id="error-banner" class="alert alert-danger mb-0 rounded-0" hidden></div>
+    </div>
+
+    <div id="subs-container">
+      <div class="text-center py-5 text-muted">
+        <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const API_KEY = (typeof SUSCRIPCIONES_API_KEY !== 'undefined') ? SUSCRIPCIONES_API_KEY : '';
+
+    const FIELD_LABELS = {
+      provincia:    'Provincia',
+      poblacion:    'Población',
+      tipoVia:      'Tipo de Vía',
+      via:          'Vía',
+      numero:       'Número',
+      piso:         'Piso',
+      bloque:       'Bloque',
+      escalera:     'Escalera',
+      planta:       'Planta',
+      puerta:       'Puerta',
+      letra:        'Letra',
+      portalPuerta: 'Portal / Puerta',
+    };
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatDate(iso) {
+      try {
+        return new Date(iso).toLocaleString('es-ES', {
+          day: '2-digit', month: '2-digit', year: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+      } catch { return iso; }
+    }
+
+    function buildAddress(sub) {
+      const parts = [sub.tipoVia, sub.via, sub.numero, sub.bloque, sub.escalera,
+                     sub.piso, sub.planta, sub.puerta, sub.letra].filter(Boolean);
+      let addr = parts.join(' ');
+      if (sub.poblacion) addr += (addr ? ', ' : '') + sub.poblacion;
+      if (sub.provincia && sub.provincia !== sub.poblacion) addr += ` (${sub.provincia})`;
+      return addr || '—';
+    }
+
+    function authHeaders() {
+      const h = { 'Content-Type': 'application/json' };
+      if (API_KEY) h['Authorization'] = `Bearer ${API_KEY}`;
+      return h;
+    }
+
+    async function apiFetch(method, params = '') {
+      const res = await fetch(`/api/suscripciones${params}`, {
+        method,
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    function renderCard(sub) {
+      const fields = Object.entries(FIELD_LABELS)
+        .filter(([k]) => sub[k])
+        .map(([k, label]) => `
+          <div class="col-6 col-sm-4 col-md-3 mb-2">
+            <div class="field-label">${escapeHtml(label)}</div>
+            <div class="small">${escapeHtml(sub[k])}</div>
+          </div>`).join('');
+
+      const hasFields = Object.keys(FIELD_LABELS).some(k => sub[k]);
+
+      const coordsHtml = (sub.lat && sub.lng) ? `
+        <div class="mb-2">
+          <div class="field-label mb-1">Coordenadas</div>
+          <a href="https://www.google.com/maps?q=${encodeURIComponent(sub.lat)},${encodeURIComponent(sub.lng)}"
+             target="_blank" rel="noopener" class="small font-monospace text-decoration-none">
+            📍 ${escapeHtml(sub.lat)}, ${escapeHtml(sub.lng)}
+          </a>
+        </div>` : '';
+
+      const comentarioHtml = sub.comentario ? `
+        <div class="mb-2">
+          <div class="field-label mb-1">Comentario</div>
+          <div class="small bg-white border rounded p-2">${escapeHtml(sub.comentario)}</div>
+        </div>` : '';
+
+      const fotosHtml = (sub.fotos && sub.fotos.length) ? `
+        <div class="mb-1">
+          <div class="field-label mb-1">Fotos adjuntas (${sub.fotos.length})</div>
+          <div>${sub.fotos.map(f => {
+            const isUrl = /^https?:\/\//i.test(f);
+            const href = isUrl ? f : `/fotos/${encodeURIComponent(f)}`;
+            const name = isUrl ? f.split('/').pop() : f;
+            return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" download="${escapeHtml(name)}"
+              class="badge bg-secondary me-1 mb-1 text-decoration-none" style="cursor:pointer">📎 ${escapeHtml(name)}</a>`;
+          }).join('')}</div>
+        </div>` : '';
+
+      return `
+        <div class="card shadow-sm sub-card mb-3" data-id="${sub.id}">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+              <div>
+                <div class="fw-semibold">${escapeHtml(buildAddress(sub))}</div>
+                <div class="text-muted small">🕐 ${formatDate(sub.fecha)}</div>
+              </div>
+              <button class="btn btn-outline-danger btn-sm flex-shrink-0 btn-delete" data-id="${sub.id}">
+                Eliminar
+              </button>
+            </div>
+            ${hasFields ? `<hr class="my-2"><div class="row">${fields}</div>` : ''}
+            ${coordsHtml}${comentarioHtml}${fotosHtml}
+          </div>
+        </div>`;
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-banner');
+      el.textContent = msg;
+      el.hidden = !msg;
+    }
+
+    async function load() {
+      showError('');
+      document.getElementById('subs-container').innerHTML = `
+        <div class="text-center py-5 text-muted">
+          <div class="spinner-border spinner-border-sm me-2"></div>Cargando...
+        </div>`;
+      try {
+        const subs      = await apiFetch('GET');
+        const container = document.getElementById('subs-container');
+        const countEl   = document.getElementById('sub-count-badge');
+        const clearBtn  = document.getElementById('btn-clear-all');
+
+        countEl.textContent = subs.length === 1 ? '1 suscripción' : `${subs.length} suscripciones`;
+        clearBtn.disabled   = subs.length === 0;
+
+        if (!subs.length) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div style="font-size:3rem">📭</div>
+              <p class="mt-3">No hay suscripciones registradas todavía.</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = subs.map(renderCard).join('');
+
+        container.querySelectorAll('.btn-delete').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            btn.disabled    = true;
+            btn.textContent = '…';
+            try {
+              await apiFetch('DELETE', `?id=${btn.dataset.id}`);
+              btn.closest('.sub-card').remove();
+              const remaining = document.querySelectorAll('.sub-card').length;
+              countEl.textContent = remaining === 1 ? '1 suscripción' : `${remaining} suscripciones`;
+              if (!remaining) load();
+            } catch (e) {
+              showError(`Error al eliminar: ${e.message}`);
+              btn.disabled    = false;
+              btn.textContent = 'Eliminar';
+            }
+          });
+        });
+      } catch (e) {
+        showError(`No se pudo cargar la lista: ${e.message}`);
+        document.getElementById('subs-container').innerHTML = '';
+      }
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', load);
+
+    document.getElementById('btn-clear-all').addEventListener('click', async () => {
+      if (!confirm('¿Eliminar todas las suscripciones? Esta acción no se puede deshacer.')) return;
+      try {
+        await apiFetch('DELETE');
+        load();
+      } catch (e) {
+        showError(`Error al limpiar: ${e.message}`);
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
