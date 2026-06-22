@@ -1,7 +1,9 @@
 const path = require('path');
 const fs   = require('fs');
 
-const DATA_FILE   = path.join(__dirname, '..', 'data', 'suscripciones.json');
+const DATA_FILE   = process.env.VERCEL
+  ? path.join('/tmp', 'suscripciones.json')
+  : path.join(__dirname, '..', 'data', 'suscripciones.json');
 const USE_KV      = !!(process.env.KV_REST_API_URL);
 
 const CORS = {
