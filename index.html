@@ -120,10 +120,11 @@
           <div class="small bg-white border rounded p-2">${escapeHtml(sub.comentario)}</div>
         </div>` : '';
 
-      const fotosHtml = (sub.fotos && sub.fotos.length) ? `
+      const fotosValidas = (sub.fotos || []).filter(f => f && typeof f === 'string');
+      const fotosHtml = fotosValidas.length ? `
         <div class="mb-1">
-          <div class="field-label mb-1">Fotos adjuntas (${sub.fotos.length})</div>
-          <div>${sub.fotos.map(f => {
+          <div class="field-label mb-1">Fotos adjuntas (${fotosValidas.length})</div>
+          <div>${fotosValidas.map(f => {
             const isUrl = /^https?:\/\//i.test(f);
             const href = isUrl ? f : `/fotos/${encodeURIComponent(f)}`;
             const name = isUrl ? f.split('/').pop() : f;
